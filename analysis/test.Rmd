@@ -1,0 +1,153 @@
+---
+title: "SimplerFLASH"
+author: "Youngseok Kim"
+date: "2/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load code
+
+```{r}
+library(flashr); library(flashier); library(Rcpp); library(svd);
+library(ebnm); library(ggplot2); library(cowplot)
+sourceCpp('~/git/Youngseok/simplerflash/flashcaisa.cpp');
+source('~/git/Youngseok/simplerflash/flash_caisa.R');
+sa = pmax(2^(0:7) - 1, 0)
+```
+
+## Code for plotting
+
+```{r}
+plot_bar   <- function(factor, r, nncol = 5) {
+  k         = ncol(factor)
+  p         = nrow(factor)
+  r         = 10
+  df        = data.frame(x = 1:p, value = factor[,1], k = 1, group = as.factor(rep(1:r, each = p/r)))
+  if (k > 1) {
+    for (i in 2:k) {
+      df    = rbind(df, data.frame(x = 1:p, value = factor[,i], k = i, group = as.factor(rep(1:r, each = p/r))))
+    }
+  }
+  fig       = ggplot(df, aes_string(x = "x", y = "value", color = "group")) +
+              geom_bar(stat = "identity") +# scale_color_manual(values = b[1:r]) +
+              scale_x_discrete(labels = NULL) +
+              theme_cowplot() +
+              theme(axis.line       = element_blank(),
+                    legend.position = "none") +
+              facet_wrap(~k, ncol = nncol)
+  fig
+}
+```
+
+## Test for moderate size data
+
+```{r}
+# make data of size 1000 * 1000 with 20 non-gaussian factors
+set.seed(1) # for reproducibility
+ftrue = matrix(0,1000,20)
+ltrue = matrix(0,1000,20)
+for (i in 1:20) {
+  ind = (1:50) + (i-1) * 50
+  ltrue[ind,i] = rexp(50) * i^(1/2)
+  ftrue[ind,i] = rexp(50)
+}
+Ytrue  = ltrue %*% t(ftrue)/5
+Y      = Ytrue + rnorm(1000000)
+
+system.time(out  <- flash_caisa(Y, 20, sa2 = sa^2,
+                               maxiter = 1000, epstol = 1e-10, epoch = 2))[3]
+system.time(out2 <- flash(Y, var_type = "constant"))[3]
+system.time(out3 <- flashier(Y, var.type = 0))[3]
+system.time(out4 <- flash_caisa(Y, ncol(out2$EF) - 1, sa2 = sa^2, convtol = 1e-8,
+                                maxiter = 1000, epstol = 1e-10, epoch = 2))[3]
+
+mean((Ytrue - out$A %*% t(out$B))^2)
+mean((Ytrue - out2$EL %*% t(out2$EF))^2)
+mean((Ytrue - out3$fit$EF[[1]] %*% t(out3$fit$EF[[2]]))^2)
+mean((Ytrue - out4$A %*% t(out4$B))^2)
+```
+
+```{r}
+pve       = colSums(out$A^2) * colSums(out$B^2)
+pve_order = order(colSums(out$A^2) * colSums(out$B^2), decreasing = TRUE)
+B         = out$B[,pve_order]
+plot(pve[pve_order])
+plot_bar(B, 20, 5)
+```
+
+```{r}
+# make data of size 1000 * 1000 with 20 non-gaussian factors
+set.seed(1) # for reproducibility
+ftrue = matrix(0,2000,10)
+ltrue = matrix(0,2000,10)
+for (i in 1:10) {
+  ind = (1:200) + (i-1) * 200
+  ltrue[ind,i] = rexp(200) * i^(1/2)
+  ftrue[ind,i] = rexp(200)
+}
+Ytrue  = ltrue %*% t(ftrue)/20
+Y      = Ytrue + rnorm(4000000)
+
+
+system.time(out  <- flash_caisa(Y, 10, sa2 = sa^2, convtol = 1e-8,
+                                maxiter = 1000, epstol = 1e-10, epoch = 2))[3]
+system.time(out2 <- flash(Y, var_type = "constant"))[3]
+system.time(out3 <- flashier(Y, var.type = 0))[3]
+system.time(out4 <- flash_caisa(Y, ncol(out2$EF) - 1, sa2 = sa^2, convtol = 1e-8,
+                                maxiter = 1000, epstol = 1e-10, epoch = 2))[3]
+
+mean((Ytrue - out$A %*% t(out$B))^2)
+mean((Ytrue - out2$EL %*% t(out2$EF))^2)
+mean((Ytrue - out3$fit$EF[[1]] %*% t(out3$fit$EF[[2]]))^2)
+mean((Ytrue - out4$A %*% t(out4$B))^2)
+```
+
+```{r}
+pve       = colSums(out$A^2) * colSums(out$B^2)
+pve_order = order(colSums(out$A^2) * colSums(out$B^2), decreasing = TRUE)
+B         = out$B[,pve_order]
+plot(pve[pve_order])
+plot_bar(B, 50, 10)
+```
+
+```{r}
+# make data of size 1000 * 1000 with 20 non-gaussian factors
+set.seed(1) # for reproducibility
+ftrue = matrix(0,1000,50)
+ltrue = matrix(0,1000,50)
+for (i in 1:50) {
+  ind = (1:20) + (i-1) * 20
+  ltrue[ind,i] = rexp(20) * i^(1/2)
+  ftrue[ind,i] = rexp(20)
+}
+Ytrue = ltrue %*% t(ftrue)/5
+Y      = Ytrue + rnorm(1000000)
+
+system.time(out  <- flash_caisa(Y, 50, sa2 = sa^2,
+                               maxiter = 1000, epstol = 1e-10, epoch = 2))[3]
+system.time(out2 <- flash(Y, var_type = "constant"))[3]
+system.time(out3 <- flashier(Y, var.type = 0))[3]
+system.time(out4 <- flash_caisa(Y, ncol(out2$EF) - 1, sa2 = sa^2,
+                                maxiter = 1000, epstol = 1e-10, epoch = 2))[3]
+
+mean((Ytrue - out$A %*% t(out$B))^2)
+mean((Ytrue - out2$EL %*% t(out2$EF))^2)
+mean((Ytrue - out3$fit$EF[[1]] %*% t(out3$fit$EF[[2]]))^2)
+mean((Ytrue - out4$A %*% t(out4$B))^2)
+```
+
+```{r}
+pve       = colSums(out$A^2) * colSums(out$B^2)
+pve_order = order(colSums(out$A^2) * colSums(out$B^2), decreasing = TRUE)
+B         = out$B[,pve_order]
+plot(pve[pve_order])
+plot_bar(B, 50, 10)
+```
+
+
+```{r}
+```
